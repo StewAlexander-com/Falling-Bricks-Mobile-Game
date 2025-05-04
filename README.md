@@ -1,8 +1,11 @@
 # Falling Bricks Game
 
+### Click the below image to see an intro video …
 [![YouTube Short Thumbnail](https://img.youtube.com/vi/LvjWiNNIV68/maxresdefault.jpg)](https://youtube.com/shorts/LvjWiNNIV68)
 
-A dynamic arcade-style game for iOS where you control a ball to dodge falling bricks. Survive as long as possible while climbing levels and competing for high scores!
+---
+
+_**Falling Bricks**_ is a dynamic arcade-style game for iOS where you control a ball to dodge falling bricks. Survive as long as possible while climbing levels and competing for high scores!
 
 ## Features
 
