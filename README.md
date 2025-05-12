@@ -16,6 +16,7 @@ _**Falling Bricks**_ is a dynamic arcade-style game for iOS where you control a 
 - 🏆 Persistent high score system with player names
 - ⏱️ 5-second auto-advance from game over to high scores
 - 🔊 Sound effects for game events
+- 🌌 Now has a background (05/12/2025)
 
 ## Installation
 
