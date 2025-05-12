@@ -22,7 +22,16 @@ except ImportError:
 
 class FallingBricksGame(Scene):
     def setup(self):
-        self.background_color = '#1a1a1a'
+        # Try to load background image, fallback to color if not available
+        try:
+            self.background = SpriteNode('background.jpg', parent=self)
+            self.background.size = self.size
+            self.background.position = (self.size.width/2, self.size.height/2)
+            self.background.z_position = -1  # Place behind other elements
+        except Exception as e:
+            print(f"Background image not available: {e}")
+            self.background_color = '#1a1a1a'  # Fallback to dark background
+            
         self.score = 0
         self.game_over = False
         self.last_time = 0
