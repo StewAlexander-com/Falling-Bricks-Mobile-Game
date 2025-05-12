@@ -28,12 +28,12 @@ _**Falling Bricks**_ is a dynamic arcade-style game for iOS where you control a 
    `git clone https://github.com/your-username/falling-bricks-game.git`
 
 2. **Import Files to Pythonista**  
-   - Transfer `FallingBricks.py` and `ode_to_joy.m4a` to Pythonista's documents folder (in Files -> iCloud -> Pythonista)
+   - Transfer `FallingBricks.py`, `ode_to_joy.m4a` and `background.jpeg` to Pythonista's documents folder (in Files -> iCloud -> Pythonista)
 
 3. **Run Game**  
    - Open Pythonista
    - Navigate to the game file
-   - Tap the play button ▶️
+   - Tap Pythonista's play button ▶️
 
 ## How to Play
 
