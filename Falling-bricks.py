@@ -22,32 +22,34 @@ except ImportError:
 
 class FallingBricksGame(Scene):
     def setup(self):
-        # Try to load background image, fallback to color if not available
+        # Use the brick wall background image
         try:
-            self.background = SpriteNode('background.jpg', parent=self)
+            self.background = SpriteNode('background.jpg', 
+                                       position=(self.size.width/2, self.size.height/2))
             self.background.size = self.size
-            self.background.position = (self.size.width/2, self.size.height/2)
-            self.background.z_position = -1  # Place behind other elements
+            self.background.z_position = -10  # Behind everything
+            self.add_child(self.background)
         except Exception as e:
-            print(f"Background image not available: {e}")
-            self.background_color = '#1a1a1a'  # Fallback to dark background
-            
+            print(f"Could not load background image: {e}")
+            self.background_color = '#1a1a1a'  # Fallback
+        
         self.score = 0
         self.game_over = False
+        self.paused = False
         self.last_time = 0
         self.level = 1
         self.ball_radius = 15
         self.bricks = Node(parent=self)
-        self.last_milestone = 0  # Track the last 20-point milestone reached
-        self.milestone_boost = 1.0  # Speed multiplier that increases at milestones
+        self.last_milestone = 0
+        self.milestone_boost = 1.0
         self.waiting_for_input = False
         
         # Initialize brick entry timing system
         self.entry_times = {
-            'next_time': 0,           # Will be set after setup
-            'min_delay': 0.3,         # Minimum delay between bricks
-            'max_delay': 2.0,         # Maximum delay between bricks
-            'speed_factor': 0.9       # Speed increases by 10% per level
+            'next_time': 0,
+            'min_delay': 0.3,
+            'max_delay': 2.0,
+            'speed_factor': 0.9
         }
         
         # Setup background music
@@ -59,7 +61,6 @@ class FallingBricksGame(Scene):
             self.player.scale = self.ball_radius / (self.player.size.width/2)
             self.add_child(self.player)
         except Exception as e:
-            # Fallback if sprite asset is not available
             print(f"Using fallback player: {e}")
             self.player = SpriteNode(color='blue', position=(self.size.width/2, self.ball_radius + 10))
             self.player.size = (self.ball_radius * 2, self.ball_radius * 2)
@@ -71,12 +72,53 @@ class FallingBricksGame(Scene):
         self.level_label = LabelNode('Level: 1', position=(self.size.width - 100, self.size.height - 30), 
                                      font=('Helvetica', 18), parent=self)
         
+        # Pause instruction label
+        self.pause_instruction = LabelNode('Tap top-right to pause', 
+                                         position=(self.size.width - 120, self.size.height - 60),
+                                         font=('Helvetica', 12), 
+                                         color='#888888', parent=self)
+        
         # Generate first set of bricks
         self.generate_brick_set()
         
         # Set initial time AFTER setup is complete
         self.last_time = self.t
-        self.entry_times['next_time'] = self.t + 1.0  # Initial delay before first random brick
+        self.entry_times['next_time'] = self.t + 1.0
+    
+    def toggle_pause(self):
+        """Toggle pause state with visual feedback"""
+        self.paused = not self.paused
+        
+        if self.paused:
+            # Create pause overlay
+            if not hasattr(self, 'pause_overlay'):
+                self.pause_overlay = SpriteNode(color='#00000088', 
+                                              size=self.size, 
+                                              position=(self.size.width/2, self.size.height/2))
+                self.pause_overlay.z_position = 100
+                self.add_child(self.pause_overlay)
+                
+                self.pause_label = LabelNode("PAUSED", 
+                                           position=(self.size.width/2, self.size.height/2),
+                                           font=('Helvetica Bold', 48), 
+                                           color='white', parent=self)
+                self.pause_label.z_position = 101
+                self.pause_label.shadow = ('black', 0, 0, 3)
+                
+                self.resume_label = LabelNode("Tap top-right again to resume", 
+                                            position=(self.size.width/2, self.size.height/2 - 60),
+                                            font=('Helvetica', 20), 
+                                            color='#cccccc', parent=self)
+                self.resume_label.z_position = 101
+        else:
+            # Remove pause overlay
+            if hasattr(self, 'pause_overlay'):
+                self.pause_overlay.remove_from_parent()
+                self.pause_label.remove_from_parent()
+                self.resume_label.remove_from_parent()
+                delattr(self, 'pause_overlay')
+                delattr(self, 'pause_label')
+                delattr(self, 'resume_label')
     
     # High score functions
     def load_high_scores(self):
@@ -98,11 +140,9 @@ class FallingBricksGame(Scene):
     def check_high_score(self, score):
         scores = self.load_high_scores()
         
-        # If fewer than 5 scores, automatically qualifies
         if len(scores) < 5:
             return True
             
-        # Check if score beats any existing entry
         for entry in scores:
             if score > entry.get('score', 0):
                 return True
@@ -123,22 +163,19 @@ class FallingBricksGame(Scene):
         return scores[:5]
     
     def setup_background_music(self):
-        """Setup the background music player with ode_to_joy.m4a at 15% volume"""
+        """Setup background music with reduced volume"""
         self.bg_music = None
         if sound_available:
             try:
-                # Use proper Pythonista sound API parameters
-                sound.set_volume(0.15)  # Set volume to 15%
-                sound.set_honors_silent_switch(False)  # Play even when device is muted
-                self.bg_music = sound.Player('ode_to_joy.m4a')  # File in same folder
-                self.bg_music.number_of_loops = -1  # Loop indefinitely (-1)
-                # Start playing immediately
+                sound.set_volume(0.08)
+                sound.set_honors_silent_switch(False)
+                self.bg_music = sound.Player('ode_to_joy.m4a')
+                self.bg_music.number_of_loops = -1
                 self.bg_music.play()
             except Exception as e:
                 print(f"Sound initialization error: {e}")
     
     def stop_background_music(self):
-        """Stop the background music"""
         if sound_available and hasattr(self, 'bg_music') and self.bg_music:
             try:
                 self.bg_music.stop()
@@ -147,14 +184,11 @@ class FallingBricksGame(Scene):
     
     def add_random_brick(self):
         """Add a single random brick at the top of the screen"""
-        # Brick properties
         brick_width = 60
         brick_height = 20
         
-        # Choose a random horizontal position
         x = random.uniform(brick_width/2, self.size.width - brick_width/2)
         
-        # Choose brick color based on level
         colors = ['pzl:Red8', 'pzl:Green8', 'pzl:Yellow8', 'pzl:Purple8', 'pzl:Blue8']
         fallback_colors = ['#ff0000', '#00ff00', '#ffff00', '#800080', '#0000ff']
         color_index = (self.level - 1) % len(colors)
@@ -165,95 +199,108 @@ class FallingBricksGame(Scene):
             brick = SpriteNode(color=fallback_colors[color_index], position=(x, self.size.height + brick_height))
         
         brick.size = (brick_width, brick_height)
-        # Apply base speed, level modifier, and milestone boost
-        brick.speed = (2 + (self.level * 0.2)) * 1.33 * self.milestone_boost
+        # Reduced speed progression for better playability
+        brick.speed = min(6, (2 + (self.level * 0.15)) * 1.2 * self.milestone_boost)
         self.bricks.add_child(brick)
         
-        # Schedule next brick entry with randomized timing
         base_delay = self.entry_times['max_delay'] * (self.entry_times['speed_factor'] ** (self.level - 1))
         base_delay = max(self.entry_times['min_delay'], base_delay)
         random_delay = random.uniform(base_delay * 0.5, base_delay * 1.5)
         self.entry_times['next_time'] = self.t + random_delay
     
     def clear_bricks(self):
-        # Safely remove each brick individually instead of using remove_all_children()
         for brick in list(self.bricks.children):
             brick.remove_from_parent()
     
     def generate_brick_set(self):
-        # Clear existing bricks
         self.clear_bricks()
         
-        # Brick properties
         brick_width = 60
         brick_height = 20
-        min_spacing = brick_width / 4  # Quarter brick spacing
+        min_spacing = brick_width / 4
         
-        # Ensure at least 3 bricks
-        num_bricks = max(3, min(random.randint(1, self.level + 2), 5))
+        # Progressive brick counts
+        if self.level <= 3:
+            num_bricks = random.randint(3, 5)
+        else:
+            num_bricks = min(random.randint(self.level, self.level + 2), 8)
         
-        # Create potential positions with proper spacing
+        # Create staggered positions
         positions = []
         x = brick_width / 2
+        stagger = False  # For alternating rows
+        
         while x <= self.size.width - brick_width / 2:
             positions.append(x)
-            x += brick_width + min_spacing
+            # Stagger every other position for density
+            x += brick_width/2 if stagger else brick_width
+            stagger = not stagger
         
-        # Brick colors with fallbacks
         colors = ['pzl:Red8', 'pzl:Green8', 'pzl:Yellow8', 'pzl:Purple8', 'pzl:Blue8']
         fallback_colors = ['#ff0000', '#00ff00', '#ffff00', '#800080', '#0000ff']
         color_index = (self.level - 1) % len(colors)
         
-        # Randomly select positions
-        if positions:  # Check if positions list is not empty
+        # Randomly select positions with spacing check
+        selected_positions = []
+        if positions:
             random.shuffle(positions)
-            selected_positions = positions[:num_bricks]
-            
-            # Create bricks
-            for x in selected_positions:
-                try:
-                    # Try to create brick with sprite
-                    brick = SpriteNode(colors[color_index], position=(x, self.size.height + brick_height))
-                    brick.size = (brick_width, brick_height)
-                except Exception:
-                    # Fallback to colored rectangle
-                    brick = SpriteNode(color=fallback_colors[color_index], 
-                                      position=(x, self.size.height + brick_height))
-                    brick.size = (brick_width, brick_height)
-                
-                # Apply base speed, level modifier, and milestone boost
-                brick.speed = (2 + self.level * 0.2) * 1.33 * self.milestone_boost
-                
-                self.bricks.add_child(brick)
+            for pos in positions:
+                if all(abs(pos - p) >= brick_width * 1.2 for p in selected_positions):
+                    selected_positions.append(pos)
+                    if len(selected_positions) == num_bricks:
+                        break
         
-        # Ensure and randomize safe passages
+        # Create bricks with vertical staggering
+        vertical_offset = 0
+        for i, x in enumerate(selected_positions):
+            try:
+                brick = SpriteNode(colors[color_index], 
+                                position=(x, self.size.height + brick_height + vertical_offset))
+            except Exception:
+                brick = SpriteNode(color=fallback_colors[color_index],
+                                position=(x, self.size.height + brick_height + vertical_offset))
+            
+            brick.size = (brick_width, brick_height)
+            brick.speed = (2 + self.level * 0.15) * 1.15 * self.milestone_boost
+            
+            # Alternate vertical offset every other brick
+            vertical_offset = 40 if i % 2 == 0 else 0
+            self.bricks.add_child(brick)
+        
+        # Enhanced safety checks
         if self.bricks.children:
             self.ensure_safe_passage()
-            self.randomize_gap_positions()
+            self.validate_safe_passage()
     
     def check_milestone(self):
-        """Check if player reached a 20-point milestone and apply boost if needed"""
-        current_milestone = int(self.score // 20)  # Changed from 50 to 20
+        """Check milestone with visual feedback"""
+        current_milestone = int(self.score // 20)
         if current_milestone > self.last_milestone:
-            # Player reached a new 20-point milestone
             self.last_milestone = current_milestone
-            self.milestone_boost *= 1.33  # Apply additional 33% boost
-            self.level += 1  # Increase level at each milestone
+            self.milestone_boost *= 1.15  # Reduced from 1.33 to 1.15
+            self.level += 1
             self.level_label.text = f'Level: {self.level}'
             
-            # Visual/audio feedback for milestone
+            # Level-up flash effect
+            self.run_action(Action.sequence(
+                Action.scale_to(1.1, 0.1),
+                Action.scale_to(1.0, 0.1)
+            ))
+            
             if sound_available:
                 try:
-                    sound.play_effect('digital:PowerUp9')
+                    sound.play_effect('digital:PowerUp9', volume=0.4)
                 except Exception:
                     pass
     
     def ensure_safe_passage(self):
-        # Ball's required clearance (diameter)
-        required_gap = self.ball_radius * 2 + 5  # 35 units
+        """Guarantee at least 2 safe passages with larger gaps"""
+        # Much larger required gap - ball diameter + substantial safety margin
+        required_gap = self.ball_radius * 2 + 30  # Increased from 5 to 30
         
-        # Get current brick positions sorted left-to-right
         bricks = sorted(self.bricks.children, key=lambda b: b.position.x)
+        if not bricks:
+            return
         
         # Check existing gaps including screen edges
         gaps = []
@@ -271,350 +318,441 @@ class FallingBricksGame(Scene):
         if gap >= required_gap:
             gaps.append((prev_right, self.size.width))
         
-        # If enough gaps exist, do nothing
-        if len(gaps) >= 2:
-            return
-        
-        # Create necessary gaps by repositioning bricks
+        # Force creation of at least 2 safe gaps
         target_gaps = 2
-        created_gaps = 0
+        attempts = 0
+        max_attempts = 10
         
-        # First ensure left screen edge gap
-        if not any(g[0] == 0 for g in gaps):
-            # Make space at far left
-            if bricks:
-                leftmost = bricks[0]
-                new_x = required_gap + leftmost.size.width/2
-                if new_x < leftmost.position.x:
-                    leftmost.position.x = new_x
-                    created_gaps += 1
-        
-        # Then ensure right screen edge gap
-        if not any(g[1] == self.size.width for g in gaps):
-            if bricks:
-                rightmost = bricks[-1]
-                new_x = self.size.width - required_gap - rightmost.size.width/2
-                if new_x > rightmost.position.x:
-                    rightmost.position.x = new_x
-                    created_gaps += 1
-        
-        # Create middle gaps if still needed
-        if created_gaps < target_gaps and len(bricks) >= 2:
-            # Find largest existing gap between bricks
-            max_gap_size = 0
-            max_gap_index = -1
-            for i in range(1, len(bricks)):
-                gap = (bricks[i].position.x - bricks[i].size.width/2) - \
-                      (bricks[i-1].position.x + bricks[i-1].size.width/2)
-                if gap > max_gap_size:
-                    max_gap_size = gap
-                    max_gap_index = i
+        while len(gaps) < target_gaps and attempts < max_attempts:
+            attempts += 1
             
-            # Enlarge the largest gap if possible
-            if max_gap_size > 0 and max_gap_index != -1:
-                left_brick = bricks[max_gap_index-1]
-                right_brick = bricks[max_gap_index]
-                needed_space = required_gap - max_gap_size
+            if len(bricks) <= 1:
+                # If only 1 or no bricks, we have plenty of space
+                break
+            
+            # Remove a brick to create more space
+            if bricks:
+                # Remove from the most crowded area
+                brick_to_remove = None
+                min_gap = float('inf')
                 
-                if needed_space > 0:
-                    # Calculate available movement space
-                    left_available = left_brick.position.x - left_brick.size.width/2
-                    right_available = self.size.width - (right_brick.position.x + right_brick.size.width/2)
+                for i, brick in enumerate(bricks):
+                    left_gap = 0
+                    right_gap = 0
                     
-                    # Distribute space adjustment
-                    left_adjust = min(needed_space/2, left_available)
-                    right_adjust = min(needed_space/2, right_available)
+                    if i > 0:
+                        left_gap = brick.position.x - bricks[i-1].position.x
+                    if i < len(bricks) - 1:
+                        right_gap = bricks[i+1].position.x - brick.position.x
                     
-                    # Reposition bricks
-                    left_brick.position.x -= left_adjust
-                    right_brick.position.x += right_adjust
-                    created_gaps += 1
-
-        # Final check and fallback
-        if created_gaps < target_gaps and len(bricks) > 0:
-            # Remove middle brick to create emergency gap
+                    total_gap = left_gap + right_gap
+                    if total_gap < min_gap:
+                        min_gap = total_gap
+                        brick_to_remove = brick
+                
+                if brick_to_remove:
+                    brick_to_remove.remove_from_parent()
+                    bricks.remove(brick_to_remove)
+            
+            # Recalculate gaps
+            gaps = []
+            prev_right = 0
+            for brick in bricks:
+                current_left = brick.position.x - brick.size.width/2
+                gap = current_left - prev_right
+                if gap >= required_gap:
+                    gaps.append((prev_right, current_left))
+                prev_right = brick.position.x + brick.size.width/2
+            
+            # Check right screen edge
+            gap = self.size.width - prev_right
+            if gap >= required_gap:
+                gaps.append((prev_right, self.size.width))
+    
+    def validate_safe_passage(self):
+        """Final validation to ensure paths exist"""
+        required_gap = self.ball_radius * 2 + 20
+        bricks = sorted(self.bricks.children, key=lambda b: b.position.x)
+        
+        safe_paths = 0
+        
+        # Check left edge
+        if not bricks or bricks[0].position.x - bricks[0].size.width/2 >= required_gap:
+            safe_paths += 1
+        
+        # Check gaps between bricks
+        for i in range(len(bricks) - 1):
+            gap = (bricks[i+1].position.x - bricks[i+1].size.width/2) - \
+                  (bricks[i].position.x + bricks[i].size.width/2)
+            if gap >= required_gap:
+                safe_paths += 1
+        
+        # Check right edge
+        if not bricks or (self.size.width - (bricks[-1].position.x + bricks[-1].size.width/2)) >= required_gap:
+            safe_paths += 1
+        
+        # If less than 2 safe paths, remove more bricks
+        while safe_paths < 2 and len(bricks) > 0:
+            # Remove the middle brick
             middle_index = len(bricks) // 2
             bricks[middle_index].remove_from_parent()
+            bricks.pop(middle_index)
+            
+            # Recalculate safe paths
+            safe_paths = 0
+            if not bricks or bricks[0].position.x - bricks[0].size.width/2 >= required_gap:
+                safe_paths += 1
+            
+            for i in range(len(bricks) - 1):
+                gap = (bricks[i+1].position.x - bricks[i+1].size.width/2) - \
+                      (bricks[i].position.x + bricks[i].size.width/2)
+                if gap >= required_gap:
+                    safe_paths += 1
+            
+            if not bricks or (self.size.width - (bricks[-1].position.x + bricks[-1].size.width/2)) >= required_gap:
+                safe_paths += 1
     
     def randomize_gap_positions(self):
-        """Randomizes horizontal positions of safe gaps"""
-        if not self.bricks.children:
-            return
-        
-        bricks = sorted(self.bricks.children, key=lambda b: b.position.x)
-        if not bricks:
-            return
-            
-        brick_width = bricks[0].size.width
-        
-        # Calculate formation boundaries
-        leftmost = bricks[0].position.x - brick_width/2
-        rightmost = bricks[-1].position.x + brick_width/2
-        
-        # Calculate maximum safe shift range
-        max_shift_left = leftmost
-        max_shift_right = self.size.width - rightmost
-        
-        if max_shift_left + max_shift_right > 0:
-            # Apply random shift within safe limits
-            shift = random.uniform(-max_shift_left, max_shift_right)
-            for brick in bricks:
-                brick.position.x += shift
+        """REMOVED - to prevent breaking safe passages"""
+        # This function is now empty to prevent shifting that could block paths
+        pass
     
     def update(self):
         if self.game_over:
-            # Check if game over screen has been shown for 5 seconds
             if hasattr(self, 'game_over_time') and hasattr(self, 'countdown_label'):
                 elapsed = self.t - self.game_over_time
-                remaining = max(0, 5 - int(elapsed))  # Changed from 15 to 5 seconds
+                remaining = max(0, 5 - int(elapsed))
                 
-                # Update the countdown display
                 if hasattr(self, 'countdown_value') and remaining != self.countdown_value:
                     self.countdown_value = remaining
                     self.countdown_label.text = f'Continuing in {remaining} seconds...'
                 
-                # Transition when timer reaches zero
                 if remaining == 0 and not hasattr(self, 'high_scores_shown'):
                     self.high_scores_shown = True
                     self.handle_high_score()
             return
+        
+        # Skip update if paused
+        if self.paused:
+            return
             
-        # Update score with proper time delta
         current_time = self.t
         elapsed = current_time - self.last_time
         self.score += elapsed
         self.score_label.text = f'Score: {int(self.score)}'
         self.last_time = current_time
         
-        # Check for 20-point milestones
         self.check_milestone()
         
-        # Check if all bricks have passed
         all_bricks_passed = True
         
-        # Update brick positions and check collisions
         for brick in list(self.bricks.children):
-            # Move brick down
             brick.position = (brick.position.x, brick.position.y - brick.speed)
             
-            # Check if brick reached bottom
             if brick.position.y < -brick.size.height:
                 brick.remove_from_parent()
             else:
                 all_bricks_passed = False
                 
-                # Check collision with player
                 if self.check_collision(brick, self.player):
                     self.game_over = True
-                    self.stop_background_music()  # Stop music before game over
+                    # Screen shake effect on collision
+                    self.run_action(Action.sequence(
+                        Action.move_by(10, 0, 0.05),
+                        Action.move_by(-20, 0, 0.05),
+                        Action.move_by(10, 0, 0.05)
+                    ))
+                    self.stop_background_music()
                     self.show_game_over()
                     break
         
-        # Check if it's time to add a new random brick
         if self.t >= self.entry_times['next_time']:
             self.add_random_brick()
         
-        # If all bricks have passed, generate a new set and increase level
         if all_bricks_passed and len(self.bricks.children) == 0:
             self.level += 1
             self.level_label.text = f'Level: {self.level}'
             self.generate_brick_set()
             
-            # Play sound effect if available
             if sound_available:
                 try:
-                    sound.play_effect('digital:PowerUp7')
+                    sound.play_effect('digital:PowerUp7', volume=0.3)
                 except Exception:
-                    pass  # Continue if sound fails
+                    pass
     
     def check_collision(self, brick, player):
-        # Circle-rectangle collision detection
         try:
             circle_x, circle_y = player.position
             
-            # Find closest point on rectangle to circle
             closest_x = max(brick.position.x - brick.size.width/2, 
                             min(circle_x, brick.position.x + brick.size.width/2))
             closest_y = max(brick.position.y - brick.size.height/2, 
                             min(circle_y, brick.position.y + brick.size.height/2))
             
-            # Calculate distance
             distance_x = circle_x - closest_x
             distance_y = circle_y - closest_y
             distance_squared = distance_x**2 + distance_y**2
             
             return distance_squared < (self.ball_radius**2)
         except Exception:
-            return False  # Default to no collision on error
+            return False
     
     def reset_game(self):
-        # Reset game state
         self.score = 0
         self.game_over = False
-        self.last_time = self.t  # Use current time for reset
+        self.paused = False
+        self.last_time = self.t
         self.level = 1
-        self.last_milestone = 0  # Reset milestone tracking
-        self.milestone_boost = 1.0  # Reset speed boost
+        self.last_milestone = 0
+        self.milestone_boost = 1.0
         self.waiting_for_input = False
         
-        # Remove timeout attributes
-        if hasattr(self, 'game_over_time'):
-            delattr(self, 'game_over_time')
-        if hasattr(self, 'high_scores_shown'):
-            delattr(self, 'high_scores_shown')
-        if hasattr(self, 'countdown_label'):
-            delattr(self, 'countdown_label')
-        if hasattr(self, 'countdown_value'):
-            delattr(self, 'countdown_value')
+        # Clean up pause elements if they exist
+        if hasattr(self, 'pause_overlay'):
+            self.pause_overlay.remove_from_parent()
+            self.pause_label.remove_from_parent()
+            self.resume_label.remove_from_parent()
+            delattr(self, 'pause_overlay')
+            delattr(self, 'pause_label')
+            delattr(self, 'resume_label')
         
-        # Reset brick entry timing
+        # Remove other attributes
+        for attr in ['game_over_time', 'high_scores_shown', 'countdown_label', 'countdown_value']:
+            if hasattr(self, attr):
+                delattr(self, attr)
+        
         self.entry_times['next_time'] = self.t + 1.0
         
-        # Update UI
         self.score_label.text = 'Score: 0'
         self.level_label.text = 'Level: 1'
         
-        # Reset player position
         self.player.position = (self.size.width/2, self.ball_radius + 10)
         
-        # Remove game over UI elements
         for child in list(self.children):
-            if child != self.player and child != self.bricks and child != self.score_label and child != self.level_label:
+            if child not in [self.player, self.bricks, self.score_label, self.level_label, self.pause_instruction, self.background]:
                 child.remove_from_parent()
         
-        # Generate new bricks
         self.generate_brick_set()
         
-        # Restart background music
         if hasattr(self, 'bg_music') and self.bg_music:
             self.bg_music.play()
     
     def touch_began(self, touch):
+        # Check for pause toggle (top-right corner)
+        if (touch.location.x > self.size.width - 100 and 
+            touch.location.y > self.size.height - 100 and 
+            not self.game_over):
+            self.toggle_pause()
+            return
+        
         if self.game_over and not self.waiting_for_input:
             if not hasattr(self, 'high_scores_shown'):
-                # If high scores aren't shown yet, show them instead of resetting
                 self.high_scores_shown = True
                 self.handle_high_score()
             else:
-                # Otherwise reset the game
                 self.reset_game()
     
     def touch_moved(self, touch):
-        if self.game_over:
+        if self.game_over or self.paused:
             return
             
-        # Move player horizontally based on touch
         new_x = touch.location.x
-        # Keep player within screen bounds
         new_x = max(self.ball_radius, min(new_x, self.size.width - self.ball_radius))
         self.player.position = (new_x, self.player.position.y)
     
     def show_game_over(self):
         try:
-            # First show the game over screen
-            overlay = SpriteNode(color='#00000099', 
+            # Clear any existing game over elements first
+            for child in list(self.children):
+                if hasattr(child, 'is_game_over_element') and child.is_game_over_element:
+                    child.remove_from_parent()
+            
+            # Much darker background - almost black with slight blue tint
+            overlay = SpriteNode(color='#000011f8', 
                                size=self.size, 
                                position=(self.size.width/2, self.size.height/2))
+            overlay.z_position = 50
+            overlay.is_game_over_element = True
             self.add_child(overlay)
             
-            LabelNode('Game Over!', 
-                    position=(self.size.width/2, self.size.height/2 + 50),
-                    font=('Helvetica', 30),
-                    parent=self)
+            # Main game over title - positioned at top
+            self.game_over_title = LabelNode('GAME OVER', 
+                                      position=(self.size.width/2, self.size.height/2 + 180),
+                                      font=('Helvetica Bold', 40), 
+                                      color='white')
+            self.game_over_title.shadow = ('black', 0, 0, 4)
+            self.game_over_title.z_position = 60
+            self.game_over_title.is_game_over_element = True
+            self.add_child(self.game_over_title)
             
-            LabelNode(f'Final Score: {int(self.score)}',
-                    position=(self.size.width/2, self.size.height/2),
-                    font=('Helvetica', 20),
-                    parent=self)
+            # Score section - well separated
+            self.score_display = LabelNode(f'YOUR SCORE: {int(self.score)}',
+                    position=(self.size.width/2, self.size.height/2 + 120),
+                    font=('Helvetica Bold', 28), 
+                    color='#00ff99')
+            self.score_display.shadow = ('black', 0, 0, 3)
+            self.score_display.z_position = 60
+            self.score_display.is_game_over_element = True
+            self.add_child(self.score_display)
             
-            LabelNode(f'Level Reached: {self.level}',
-                    position=(self.size.width/2, self.size.height/2 - 30),
-                    font=('Helvetica', 20),
-                    parent=self)
+            # Level display - below score
+            self.level_display = LabelNode(f'Level Reached: {self.level}',
+                    position=(self.size.width/2, self.size.height/2 + 80),
+                    font=('Helvetica', 22), 
+                    color='white')
+            self.level_display.shadow = ('black', 0, 0, 2)
+            self.level_display.z_position = 60
+            self.level_display.is_game_over_element = True
+            self.add_child(self.level_display)
             
-            # Add countdown indicator as a dynamic label with 5 second countdown
+            # Countdown - clearly separated at bottom of score section
             self.countdown_label = LabelNode('Continuing in 5 seconds...',
-                    position=(self.size.width/2, self.size.height/2 - 60),
-                    font=('Helvetica', 16),
-                    parent=self)
+                    position=(self.size.width/2, self.size.height/2 + 40),
+                    font=('Helvetica', 16), 
+                    color='#cccccc')
+            self.countdown_label.shadow = ('black', 0, 0, 2)
+            self.countdown_label.z_position = 60
+            self.countdown_label.is_game_over_element = True
+            self.add_child(self.countdown_label)
             
-            # Record when game over screen was shown and set initial countdown value
             self.game_over_time = self.t
-            self.countdown_value = 5  # Changed from 15 to 5
+            self.countdown_value = 5
             
-            # Play game over sound
             if sound_available:
                 try:
-                    sound.play_effect('game:Error')
+                    sound.play_effect('game:Error', volume=0.6)
                 except Exception:
-                    pass  # Continue if sound fails
+                    pass
             
         except Exception as e:
             print(f"Error showing game over: {e}")
     
     def handle_high_score(self):
-        """Handle high score after game over screen is displayed"""
         final_score = int(self.score)
         is_high_score = self.check_high_score(final_score)
         
-        # Get player name if it's a high score
-        player_name = "Anonymous"
-        
         if is_high_score and console_available:
-            # Run name input in a separate thread to avoid blocking
             def name_input_thread():
                 try:
                     self.waiting_for_input = True
                     name = console.input_alert(
-                        "New High Score!",
-                        f"Your score: {final_score}. Enter your name:",
+                        "🏆 NEW HIGH SCORE!",
+                        f"Score: {final_score}\nEnter your name:",
                         "",
                         "Save"
                     )
-                    # Process results on the main thread
                     self.finalize_high_score(final_score, name)
                 except Exception as e:
                     print(f"Error getting player name: {e}")
-                    # Show scores even if there was an error
                     self.display_high_scores(self.load_high_scores())
                 finally:
                     self.waiting_for_input = False
             
-            # Start the thread
             t = threading.Thread(target=name_input_thread)
             t.daemon = True
             t.start()
         else:
-            # No high score or console not available
             self.display_high_scores(self.load_high_scores())
     
     def finalize_high_score(self, score, name):
-        """Update high scores and display results after name input"""
         high_scores = self.update_high_scores(score, name)
         self.display_high_scores(high_scores)
     
     def display_high_scores(self, high_scores):
-        # Display high scores on game over screen
-        y_position = self.size.height/2 - 80
-        LabelNode('Top Scores:',
-                position=(self.size.width/2, y_position),
-                font=('Helvetica', 18),
-                parent=self)
-        y_position -= 30
+        # Clear ALL initial game over elements before showing high scores
+        elements_to_clear = ['game_over_title', 'score_display', 'level_display', 'countdown_label']
+        for element_name in elements_to_clear:
+            if hasattr(self, element_name):
+                element = getattr(self, element_name)
+                element.remove_from_parent()
+                delattr(self, element_name)
         
+        # Show fresh "GAME OVER" title at the top
+        game_over_clean = LabelNode('GAME OVER', 
+                                  position=(self.size.width/2, self.size.height/2 + 180),
+                                  font=('Helvetica Bold', 40), 
+                                  color='white')
+        game_over_clean.shadow = ('black', 0, 0, 4)
+        game_over_clean.z_position = 60
+        game_over_clean.is_game_over_element = True
+        self.add_child(game_over_clean)
+        
+        # Show final score cleanly
+        final_score_clean = LabelNode(f'YOUR SCORE: {int(self.score)}',
+                position=(self.size.width/2, self.size.height/2 + 130),
+                font=('Helvetica Bold', 26), 
+                color='#00ff99')
+        final_score_clean.shadow = ('black', 0, 0, 3)
+        final_score_clean.z_position = 60
+        final_score_clean.is_game_over_element = True
+        self.add_child(final_score_clean)
+        
+        # Dark panel for high scores - positioned well below the score
+        scores_panel = SpriteNode(color='#000022ee',
+                                size=(420, 360),
+                                position=(self.size.width/2, self.size.height/2 - 40))
+        scores_panel.stroke_color = '#ffffff99'
+        scores_panel.stroke_width = 3
+        scores_panel.z_position = 55
+        scores_panel.is_game_over_element = True
+        self.add_child(scores_panel)
+        
+        # Title - positioned at top of panel with no overlap
+        title_label = LabelNode('🏆 TOP SCORES',
+                position=(self.size.width/2, self.size.height/2 + 60),
+                font=('Helvetica Bold', 26), 
+                color='#ffee44')
+        title_label.shadow = ('black', 0, 0, 3)
+        title_label.z_position = 60
+        title_label.is_game_over_element = True
+        self.add_child(title_label)
+        
+        # High scores list with proper tabbed formatting
+        y_position = self.size.height/2 + 10
         for i, entry in enumerate(high_scores[:5]):
-            emoji = '⭐️' if i == 0 else f'{i+1}.'
-            text = f"{emoji} {entry['score']} - {entry['name']} ({entry['date']})"
-            LabelNode(text,
-                    position=(self.size.width/2, y_position),
-                    font=('Helvetica', 14),
-                    parent=self)
-            y_position -= 25
+            rank_emoji = '⭐' if i == 0 else f'{i+1}.'
+            
+            # Score column (left aligned)
+            score_text = LabelNode(f"{rank_emoji} {entry['score']}",
+                    position=(self.size.width/2 - 120, y_position),
+                    font=('Helvetica Bold' if i == 0 else 'Helvetica', 18),
+                    color='#88ff88' if i == 0 else '#ffffff')
+            score_text.shadow = ('black', 0, 0, 2)
+            score_text.z_position = 60
+            score_text.is_game_over_element = True
+            self.add_child(score_text)
+            
+            # Name column (center)
+            name_text = LabelNode(entry['name'],
+                    position=(self.size.width/2 - 20, y_position),
+                    font=('Helvetica', 16),
+                    color='#dddddd')
+            name_text.shadow = ('black', 0, 0, 2)
+            name_text.z_position = 60
+            name_text.is_game_over_element = True
+            self.add_child(name_text)
+            
+            # Date column (right aligned)
+            date_text = LabelNode(f"({entry['date']})",
+                    position=(self.size.width/2 + 100, y_position),
+                    font=('Helvetica', 12),
+                    color='#aaaaaa')
+            date_text.shadow = ('black', 0, 0, 2)
+            date_text.z_position = 60
+            date_text.is_game_over_element = True
+            self.add_child(date_text)
+            
+            y_position -= 40  # More spacing between entries
         
-        LabelNode('Tap to Restart',
-                position=(self.size.width/2, y_position),
-                font=('Helvetica', 18),
-                parent=self)
+        # Restart instruction - positioned well below scores
+        restart_label = LabelNode('TAP TO RESTART',
+                position=(self.size.width/2, y_position - 30),
+                font=('Helvetica Bold', 24),
+                color='#ffaa44')
+        restart_label.shadow = ('black', 0, 0, 3)
+        restart_label.z_position = 60
+        restart_label.is_game_over_element = True
+        self.add_child(restart_label)
 
 # Run the game
 if __name__ == '__main__':
