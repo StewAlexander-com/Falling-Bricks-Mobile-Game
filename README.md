@@ -1,136 +1,158 @@
-# Falling Bricks Game
+# Falling Bricks — Enhanced Edition
 
-### Click the below image to see an intro video …
+### Click the image below to watch the intro video
 [![YouTube Short Thumbnail](https://img.youtube.com/vi/LvjWiNNIV68/maxresdefault.jpg)](https://youtube.com/shorts/LvjWiNNIV68)
 
 ---
 
-_**Falling Bricks**_ is a dynamic arcade-style game for iOS where you control a ball to dodge falling bricks. Survive as long as possible while climbing levels and competing for high scores!
+_**Falling Bricks**_ is a dynamic arcade-style dodge game for iOS built with [Pythonista 3](https://omz-software.com/pythonista/). Control a ball and survive increasingly chaotic waves of falling bricks as long as you can.
 
-## Features
+---
 
-### Core Gameplay
-- 🕹️ **Intuitive Touch Controls**: Simple one-touch horizontal drag control
-- 🎯 **Smart Collision Detection**: Precise circle-to-rectangle collision system
-- 🛡️ **Safe Passage Algorithm**: Ensures at least 2 playable paths through brick formations
-- ⚡ **Progressive Difficulty**: Speed and complexity increase every 20 points
-- 🏆 **Persistent High Score System**: Top 5 scores saved with player names and timestamps
+## What's New — Enhanced Edition
 
-### Visual & Audio Experience
-- 🎨 **Dynamic Visual Levels**: Brick colors change with each level progression
-- 🌌 **Background Graphics**: Custom background image support
-- 💥 **Screen Shake Effects**: Visual feedback on collisions
-- 🎶 **Background Music**: 8-bit rendition of Beethoven's "Ode to Joy"
-- 🔊 **Sound Effects**: Audio feedback for game events and level progression
+The codebase was fully audited and rewritten with a focus on architecture hardening, visual polish, and a genuine difficulty curve. Key changes from the original:
 
-### Advanced Features
-- ⏸️ **Pause Functionality**: Tap top-right corner to pause/resume game
-- ⏱️ **5-Second Auto-Advance**: Automatic transition from game over to high scores
-- 🎮 **Milestone Boost System**: Enhanced difficulty scaling with achievement rewards
-- 🧠 **Intelligent Brick Spawning**: Dynamic timing system prevents impossible scenarios
-- 📱 **Portrait Orientation**: Optimized for mobile gameplay
+### Bug Fixes
+| Bug | Fix |
+|-----|-----|
+| Duplicate level-up: `update()` and `check_milestone()` both incremented level | Unified into a single `_check_milestone()` path |
+| Entry timer not reset on restart | `_init_state()` owns all mutable state, called on setup and reset |
+| High-score file corruption on crash | Atomic write via `.tmp` + `os.replace()` |
+| Scene-graph mutation from background thread | UI queue (`_ui_queue`) drained on main `update()` tick |
+| `SpriteNode(color=Color(...))` TypeError | All colour args are plain `(r, g, b, a)` tuples throughout |
+| Two different `SAFE_GAP` constants in use | Single constant used everywhere |
+| Background removed on reset | Only nodes tagged `is_game_over_elem` are cleaned up |
+
+### Architecture
+- All game state lives in `_init_state()` — one source of truth for both `setup()` and `reset_game()`
+- `threading.Lock`-guarded UI queue for safe cross-thread scene mutations
+- All tuneable values are named module-level constants (speeds, counts, timing, gaps)
+- Every `try/except` logs to `print()` — failures are visible without crashing
+
+### Graphics
+- **Bevelled bricks**: each brick is three layered `SpriteNode`s (base + highlight strip + shadow strip)
+- **Speed-encoded visuals**: faster bricks are physically taller and shift toward orange-red; slower bricks cool toward blue — the player can read danger at a glance
+- **Player trail**: 4 fading translucent circles follow the ball
+- **Specular highlight**: white dot on the ball gives it depth
+- **Particle burst**: 8 debris dots explode from the collision point on death
+- **Level-up flash**: full-screen colour wash that fades out (replaced a scene-scale action that moved the background)
+- **HUD**: semi-transparent bar with Score (left), Level (centre), Pause button (right of centre)
+
+### Pause Button
+Replaced the invisible top-right tap zone with a rendered **❚❚** icon (two white `SpriteNode` bars on a dark pill). Swaps to a **◆** (diamond) when paused with "Tap ▶ to resume" on screen. Positioned at 75% of screen width to stay clear of Pythonista's system close button.
+
+---
+
+## Difficulty Curve
+
+### Per-level progression
+- Base speed: `2.2 + level × 0.20` px/frame, capped at `9.5`
+- A time-pressure bonus adds up to +35% on top of level speed over ~600 s — marathon runs keep accelerating without level-ups
+- Entry delay between random bricks decays at `0.87^level` with an additional time-based compression, floor `0.15 s`
+
+### Erratic-speed tiers (every 3 levels)
+From Level 3 onward, each brick rolls its own independent speed jitter. The window grows with every tier:
+
+| Levels | Tier | Per-brick jitter |
+|--------|------|-----------------|
+| 1–2    | 0    | None — uniform wall |
+| 3–5    | 1    | ±12% |
+| 6–8    | 2    | ±20% |
+| 9–11   | 3    | ±28% |
+| 12–14  | 4    | ±36% |
+| 15+    | 5+   | up to ±55% cap |
+
+Jitter is biased slightly upward so erratic tiers are harder on average, not neutral.
+
+### Visual speed encoding
+- **Taller brick** = faster (up to +10 px at speed cap)
+- **Hotter colour** (orange → red) = faster individual brick
+- **Cooler colour** (blue shift) = slower outlier
+- Ambient tier heat affects all bricks; per-brick heat is additive on top
+
+### Solvability guarantee
+Before every random brick spawn, `_placement_is_solvable()` simulates placing the new brick into the live threat band and checks that at least **2 passable corridors** would remain. If no valid position exists, the spawn is deferred — the player is never legitimately doomed by the generator.
+
+---
 
 ## Installation
 
-### Requirements:
-- iOS device with [Pythonista 3](https://omz-software.com/pythonista/) installed
+**Requirements:** iOS device with [Pythonista 3](https://omz-software.com/pythonista/) installed.
 
-### Setup:
-1. **Clone Repository**  
-   ```bash
-   git clone https://github.com/StewAlexander-com/Falling-Bricks-Mobile-Game.git
-   ```
+1. Clone or download this repository
+2. Transfer the following files to Pythonista's documents folder  
+   *(Files → iCloud Drive → Pythonista 3)*:
+   - `Falling-bricks.py`
+   - `ode_to_joy.m4a`
+   - `background.jpg`
+3. Open Pythonista 3, navigate to `Falling-bricks.py`, tap **▶**
 
-2. **Import Files to Pythonista**  
-   Transfer the following files to Pythonista's documents folder (Files → iCloud → Pythonista):
-   - `Falling-bricks.py` (main game file)
-   - `ode_to_joy.m4a` (background music)
-   - `background.jpg` (background image)
-
-3. **Run Game**  
-   - Open Pythonista 3
-   - Navigate to `Falling-bricks.py`
-   - Tap the play button ▶️
+---
 
 ## How to Play
 
-- **Touch & Drag**: Move ball horizontally across the screen
-- **Avoid**: Falling bricks of various colors
-- **Survive**: Stay alive as long as possible to increase your score
-- **Level Up**: Earn 20 points to advance levels (increased speed + new brick colors)
-- **Pause**: Tap the top-right corner to pause/resume gameplay
-- **High Scores**: Enter your name when achieving a top-5 score
+| Action | Control |
+|--------|---------|
+| Move ball | Touch and drag horizontally |
+| Pause / Resume | Tap the **❚❚** button in the top bar |
+| Skip to scores after death | Tap anywhere on the game-over screen |
+| Restart | Tap anywhere on the high-score screen |
+
+- Survive as long as possible — score is time-based
+- Every 20 points advances one level (faster bricks, more bricks, tighter gaps)
+- Enter your name if you crack the top-5
+
+---
 
 ## Game Mechanics
 
-### Scoring System
-- **Continuous Scoring**: Points accumulate based on survival time
-- **Level Progression**: Every 20 points advances to the next level
-- **Milestone Boosts**: Speed multiplier increases with each level (15% boost per level)
+### Scoring
+- Score accumulates continuously based on survival time
+- Level advances every 20 points
+- A `milestone_boost` multiplier (×1.12 per level) compounds with level speed
 
-### Difficulty Scaling
-- **Brick Speed**: Increases progressively with each level
-- **Spawn Timing**: Dynamic brick entry timing becomes more challenging
-- **Visual Complexity**: More bricks spawn as levels advance
-- **Safe Passage**: Algorithm ensures playable paths remain available
+### Brick count per wave
+- Levels 1–3: 3–5 bricks
+- Level 4+: `level + tier` to `level + tier + 2`, capped at 12
+- Max 14 live bricks on screen simultaneously
 
-## High Score System
+### Safe passage
+- Wave generation guarantees ≥ 2 corridors ≥ `(ball_diameter + 32)` px wide
+- Runtime solvability check on every additional random spawn
 
-- **Top 5 Leaderboard**: Best scores persist between game sessions
-- **Player Names**: High score achievers can enter their name
-- **Timestamps**: Date and time recorded for each high score
-- **JSON Storage**: Scores saved locally in `high_scores.json`
-
-## Technical Features
-
-### Framework & Dependencies
-- **Pythonista Scene**: Built on Pythonista's Scene framework
-- **Sound Integration**: Uses Pythonista's sound module for audio
-- **Console Integration**: Player name input via console alerts
-- **JSON Persistence**: High score data storage and retrieval
-
-### Performance Optimizations
-- **Collision Optimization**: Efficient circle-to-rectangle collision detection
-- **Memory Management**: Automatic cleanup of off-screen game objects
-- **Thread Safety**: Background threading for user input handling
-- **Error Handling**: Graceful fallbacks for missing resources
-
-## Roadmap
-
-### Planned Enhancements:
-- 🌆 **Multiple Background Themes**: Selectable visual environments
-- ✨ **Power-up Items**: Collectible bonuses and special abilities
-- 🧩 **Special Brick Patterns**: Unique formations and brick types
-- 🎚️ **Difficulty Settings**: User-selectable challenge levels
-- 📊 **Extended Stats**: Detailed gameplay analytics and achievements
-
-### Future Considerations:
-- ☁️ **Cloud-synced High Scores**: Cross-device score synchronization
-- 📳 **Haptic Feedback**: Tactile response integration
-- 🎨 **Ball Customization**: Selectable player character designs
-- 📏 **Dynamic Brick Sizes**: Variable brick dimensions for added complexity
-- 🎵 **Multiple Music Tracks**: Expanded audio library
+---
 
 ## File Structure
 
 ```
 Falling-Bricks-Mobile-Game/
-├── Falling-bricks.py          # Main game engine
-├── ode_to_joy.m4a            # Background music file
-├── background.jpg            # Background image
-├── high_scores.json          # Generated high score data
-└── README.md                 # This documentation
+├── Falling-bricks.py     # Main game (Enhanced Edition)
+├── ode_to_joy.m4a        # Background music
+├── background.jpg        # Background image
+├── high_scores.json      # Auto-generated — top 5 scores
+└── README.md
 ```
-
-## Credits
-
-- **Game Engine**: Developed using Pythonista's Scene framework
-- **Background Music**: Public domain arrangement of Beethoven's "Ode to Joy"
-- **Sound Effects**: Pythonista's built-in sound library
-- **Development**: Python implementation with iOS optimization
 
 ---
 
-**Enjoy the game!** 🕹️ 
+## Roadmap
 
-Report bugs or suggest features by opening an issue on this repository.
+- 🎚️ Selectable difficulty setting
+- 📳 Haptic feedback on collision
+- 🎨 Ball skin customisation
+- ☁️ iCloud high-score sync
+- 🎵 Additional music tracks
+- ✨ Power-up items
+
+---
+
+## Credits
+
+- Game engine: Pythonista `scene` framework by Ole Zorn
+- Background music: public domain arrangement of Beethoven's *Ode to Joy*
+- Sound effects: Pythonista built-in sound library
+
+---
+
+*Report bugs or suggest features via [Issues](https://github.com/StewAlexander-com/Falling-Bricks-Mobile-Game/issues).*
